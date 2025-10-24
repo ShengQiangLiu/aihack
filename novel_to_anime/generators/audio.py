@@ -4,11 +4,12 @@ import json
 
 
 class TextToSpeech:
-    def __init__(self, api_key: str = None, provider: str = "azure", app_id: str = None, secret_key: str = None):
+    def __init__(self, api_key: str = None, provider: str = "azure", app_id: str = None, secret_key: str = None, qiniu_base_url: str = None):
         self.api_key = api_key or os.getenv('TTS_API_KEY')
         self.provider = provider
         self.app_id = app_id or os.getenv('BAIDU_APP_ID')
         self.secret_key = secret_key or os.getenv('BAIDU_SECRET_KEY')
+        self.qiniu_base_url = qiniu_base_url or os.getenv('QINIU_BASE_URL') or "https://openai.qiniu.com"
     
     def generate_speech(self, text: str, output_path: str, language: str = "zh-CN") -> str:
         if self.provider == "azure":
@@ -28,6 +29,12 @@ class TextToSpeech:
                 print(f"⚠️ 警告: 未配置百度TTS API密钥，将生成静音音频")
                 return self._generate_silence(output_path, duration=len(text) * 0.2)
             return self._generate_baidu_tts(text, output_path, language)
+        
+        elif self.provider == "qiniu":
+            if not self.api_key:
+                print(f"⚠️ 警告: 未配置七牛TTS API密钥，将生成静音音频")
+                return self._generate_silence(output_path, duration=len(text) * 0.2)
+            return self._generate_qiniu_tts(text, output_path)
         
         else:
             raise ValueError(f"不支持的TTS提供商: {self.provider}")
@@ -127,3 +134,29 @@ class TextToSpeech:
             f.write(tts_response.content)
         
         return output_path
+    
+    def _generate_qiniu_tts(self, text: str, output_path: str) -> str:
+        import requests
+        
+        url = f"{self.qiniu_base_url}/v1/audio/speech"
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        body = {
+            "model": "tts-1",
+            "input": text,
+            "voice": "alloy",
+            "response_format": "mp3"
+        }
+        
+        response = requests.post(url, headers=headers, json=body)
+        
+        if response.status_code == 200:
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+            return output_path
+        else:
+            raise Exception(f"七牛TTS请求失败: {response.status_code} - {response.text}")
