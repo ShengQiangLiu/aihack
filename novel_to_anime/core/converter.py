@@ -22,14 +22,16 @@ class NovelToAnimeConverter:
         
         self.image_gen = ImageGenerator(
             api_key=self.config.get('image_api_key'),
-            provider=self.config.get('image_provider', 'stability')
+            provider=self.config.get('image_provider', 'stability'),
+            qiniu_base_url=self.config.get('qiniu_base_url')
         )
         
         self.tts = TextToSpeech(
             api_key=self.config.get('tts_api_key'),
             provider=self.config.get('tts_provider', 'azure'),
             app_id=self.config.get('baidu_app_id'),
-            secret_key=self.config.get('baidu_secret_key')
+            secret_key=self.config.get('baidu_secret_key'),
+            qiniu_base_url=self.config.get('qiniu_base_url')
         )
         
         self.video_composer = VideoComposer()

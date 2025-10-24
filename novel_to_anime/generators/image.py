@@ -2,9 +2,10 @@ import os
 
 
 class ImageGenerator:
-    def __init__(self, api_key: str = None, provider: str = "stability"):
+    def __init__(self, api_key: str = None, provider: str = "stability", qiniu_base_url: str = None):
         self.api_key = api_key or os.getenv('IMAGE_API_KEY')
         self.provider = provider
+        self.qiniu_base_url = qiniu_base_url or os.getenv('QINIU_BASE_URL') or "https://openai.qiniu.com"
     
     def generate_image(self, prompt: str, output_path: str) -> str:
         if not self.api_key:
@@ -15,6 +16,8 @@ class ImageGenerator:
             return self._generate_stability_ai(prompt, output_path)
         elif self.provider == "openai":
             return self._generate_openai_dalle(prompt, output_path)
+        elif self.provider == "qiniu":
+            return self._generate_qiniu_image(prompt, output_path)
         else:
             raise ValueError(f"不支持的图像生成器: {self.provider}")
     
@@ -84,3 +87,40 @@ class ImageGenerator:
             f.write(img_data)
         
         return output_path
+    
+    def _generate_qiniu_image(self, prompt: str, output_path: str) -> str:
+        import requests
+        import base64
+        
+        url = f"{self.qiniu_base_url}/v1/images/generations"
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        body = {
+            "model": "gemini-2.5-flash-image",
+            "prompt": f"anime style, high quality illustration: {prompt}",
+            "n": 1,
+            "size": "1024x1024"
+        }
+        
+        response = requests.post(url, headers=headers, json=body)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and len(data['data']) > 0:
+                if 'b64_json' in data['data'][0]:
+                    image_data = base64.b64decode(data['data'][0]['b64_json'])
+                    with open(output_path, 'wb') as f:
+                        f.write(image_data)
+                    return output_path
+                elif 'url' in data['data'][0]:
+                    img_data = requests.get(data['data'][0]['url']).content
+                    with open(output_path, 'wb') as f:
+                        f.write(img_data)
+                    return output_path
+            raise Exception(f"七牛图像生成响应格式错误: {data}")
+        else:
+            raise Exception(f"七牛图像生成失败: {response.status_code} - {response.text}")
